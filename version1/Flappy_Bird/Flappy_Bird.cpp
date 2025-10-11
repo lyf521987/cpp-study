@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string> 
 #include <string.h>
-#include <algorithm>
+#include <algorithm>                                                                                                                                  
 #include <fstream>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
@@ -126,7 +126,7 @@ int pipe_thickness_percent = 100;
 
 void setPipeThicknessPercent(int percent)
 {
-    // 取消按贴图缩放，避免遮罩变黑问题；始终使用原始贴图尺寸
+    // 不再修改贴图宽窄，始终使用原始尺寸
     if (percent < 30) percent = 30;
     if (percent > 200) percent = 200;
     pipe_thickness_percent = percent;
@@ -553,21 +553,32 @@ void gameDraw() {
     }
     if (GAME_END) {
         // one-time progress update
-        if (!game_over_processed) { onGameOver(); game_over_processed = true; if (GAME_MODE == MODE_LEVEL) { int idx = CURRENT_LEVEL - 1; if (idx >= 0 && idx < 9 && LEVEL_COMPLETE) level_unlocked[idx+1] = true; } }
+        if (!game_over_processed) {
+            onGameOver();
+            game_over_processed = true;
+            if (GAME_MODE == MODE_LEVEL) {
+                int idx = CURRENT_LEVEL - 1;
+                if (idx >= 0 && idx < 9 && LEVEL_COMPLETE) {
+                    level_unlocked[idx + 1] = true; // unlock only next level, not skip
+                }
+            }
+        }
 
         // Title: Victory or Game Over
         if (GAME_MODE == MODE_LEVEL && LEVEL_COMPLETE) {
-            settextcolor(RGB(255, 255, 0));
-            outtextxy(WIDTH/2 - 60, HEIGHT*0.18, "关卡胜利!");
+            settextstyle(56, 0, "微软雅黑");
+            settextcolor(RGB(255, 230, 90));
+            outtextxy(WIDTH/2 - 100, HEIGHT*0.18, "关卡胜利!");
+            settextstyle(16, 0, "宋体");
         } else {
             putimage(game_over.x, game_over.y, &game_over.mask, SRCAND);
             putimage(game_over.x, game_over.y, &game_over.image, SRCPAINT);
         }
 
         // Score & Stars
-        settextcolor(RGB(255, 255, 0));
+        settextcolor(GAME_MODE == MODE_LEVEL && LEVEL_COMPLETE ? RGB(255, 255, 255) : RGB(255, 255, 0));
         char thisScore[32]; sprintf_s(thisScore, "本次分数: %d", score.point);
-        outtextxy(WIDTH/2 - 80, HEIGHT*0.32, thisScore);
+        outtextxy(WIDTH/2 - 100, HEIGHT*0.32, thisScore);
         // Stars by thresholds
         int star = (score.point >= 30) ? 3 : (score.point >= 20 ? 2 : (score.point >= 10 ? 1 : 0));
         for (int i = 0; i < star; i++) {
@@ -576,7 +587,7 @@ void gameDraw() {
         }
 
         // High score
-        settextcolor(RGB(255, 255, 255));
+        settextcolor(RGB(230, 240, 255));
         char best[32]; sprintf_s(best, "历史最高分: %d", high_score);
         outtextxy(WIDTH/2 - 90, HEIGHT*0.50, best);
 
@@ -731,14 +742,21 @@ void gameUpdate() {
     while ((int)time2 - time1 > 1000 / FPS) {
 
         // Bird speed & location
-        // Bird will always fall, until reach the ground
+        // Bird movement; on LEVEL victory keep flying (no falling to ground)
         if (!GAME_PAUSED && resume_countdown_frames == 0) {
-            if (bird.y + bird.size_y < ground.y) {
-                bird.y += bird.speed;
-                bird.speed += bird.g;
-            }
-            else {
-                GAME_END = TRUE;
+            if (!(GAME_MODE == MODE_LEVEL && LEVEL_COMPLETE)) {
+                if (bird.y + bird.size_y < ground.y) {
+                    bird.y += bird.speed;
+                    bird.speed += bird.g;
+                }
+                else {
+                    GAME_END = TRUE;
+                }
+            } else {
+                // keep bird flapping forward feeling: slight up-down hover
+                if (bird.y + bird.size_y < ground.y - 1) {
+                    bird.y += (bird.frame % 2 == 0 ? 0 : -1);
+                }
             }
         }
 
