@@ -41,6 +41,8 @@ IMAGE  background;
 IMAGE  background_day;
 IMAGE  background_night;
 int background_theme = 0; // 0-day, 1-night
+bool GAME_PAUSED = false;        // pause when settings open or countdown
+int resume_countdown_frames = 0; // 3*FPS frames countdown when resuming
 
 // Ground
 struct Ground
@@ -95,6 +97,7 @@ RectBtn level_btns[10];
 int LEVEL_TARGETS[10] = {5,10,13,16,19,22,25,28,31,34};
 int level_target = 0;
 bool LEVEL_COMPLETE = false;
+bool level_unlocked[10] = { true, false, false, false, false, false, false, false, false, false };
 
 
 // Pipe
@@ -360,7 +363,7 @@ void gameInitValue() {
     btn_mode_level.y = HEIGHT * 0.65;
 
     // Settings gear button (top-right)
-    btn_settings.w = 32; btn_settings.h = 32;
+    btn_settings.w = 36; btn_settings.h = 36;
     btn_settings.x = WIDTH - btn_settings.w - 10;
     btn_settings.y = 10;
 
@@ -389,6 +392,8 @@ void gameInitValue() {
     btn_restart.x = baseX + bw + spacing; btn_restart.y = baseY;
     btn_view_achv.x = baseX + (bw + spacing) * 2; btn_view_achv.y = baseY;
     game_over_processed = false;
+    GAME_PAUSED = false;
+    resume_countdown_frames = 0;
 }
 
 void gameDraw() {
@@ -461,26 +466,38 @@ void gameDraw() {
 
         // If mode already chosen as LEVEL but not started, show level selection grid
         if (GAME_MODE == MODE_LEVEL) {
+            // hide tutorial & title behind the grid area to avoid duplication
             setfillcolor(RGB(245, 245, 245));
             for (int i = 0; i < 10; i++) {
                 solidrectangle(level_btns[i].x, level_btns[i].y, level_btns[i].x + level_btns[i].w, level_btns[i].y + level_btns[i].h);
                 setlinecolor(RGB(120, 120, 120));
                 rectangle(level_btns[i].x, level_btns[i].y, level_btns[i].x + level_btns[i].w, level_btns[i].y + level_btns[i].h);
                 char num[8]; sprintf_s(num, "%d", i + 1);
-                settextcolor(RGB(0, 0, 0));
+                // lock logic: gray out locked levels
+                bool unlocked = level_unlocked[i];
+                settextcolor(unlocked ? RGB(0, 0, 0) : RGB(150, 150, 150));
                 outtextxy(level_btns[i].x + 20, level_btns[i].y + 10, num);
+                if (!unlocked) {
+                    setlinecolor(RGB(180, 180, 180));
+                    line(level_btns[i].x, level_btns[i].y, level_btns[i].x + level_btns[i].w, level_btns[i].y + level_btns[i].h);
+                }
             }
         }
     }
     
     // Endless settings gear (top-right) visible when endless mode selected and game not over
     if (GAME_MODE == MODE_ENDLESS && !GAME_END) {
+        // Draw circular gear-like button
         setfillcolor(RGB(255, 230, 120));
-        solidrectangle(btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
+        solidcircle(btn_settings.x + btn_settings.w/2, btn_settings.y + btn_settings.h/2, btn_settings.w/2);
         setlinecolor(RGB(180, 140, 40));
-        rectangle(btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
+        circle(btn_settings.x + btn_settings.w/2, btn_settings.y + btn_settings.h/2, btn_settings.w/2);
+        // gear spokes (simple)
+        int cx = btn_settings.x + btn_settings.w/2; int cy = btn_settings.y + btn_settings.h/2; int r = btn_settings.w/2 - 6;
+        line(cx - r, cy, cx + r, cy);
+        line(cx, cy - r, cx, cy + r);
         settextcolor(RGB(50, 40, 20));
-        outtextxy(btn_settings.x + 10, btn_settings.y + 12, "设置");
+        outtextxy(btn_settings.x + 8, btn_settings.y + 10, "设");
     }
 
     // Settings panel overlay
@@ -516,9 +533,18 @@ void gameDraw() {
         solidrectangle(btn_toggle_music.x, btn_toggle_music.y, btn_toggle_music.x + btn_toggle_music.w, btn_toggle_music.y + btn_toggle_music.h);
         outtextxy(btn_toggle_music.x + 10, btn_toggle_music.y + 2, music_index == 0 ? "音乐1" : "音乐2");
     }
+    // Countdown overlay when resuming
+    if (resume_countdown_frames > 0) {
+        int seconds = (resume_countdown_frames + FPS - 1) / FPS;
+        settextstyle(48, 0, "微软雅黑");
+        settextcolor(RGB(255,255,255));
+        char c[4]; sprintf_s(c, "%d", seconds);
+        outtextxy(WIDTH/2 - 12, HEIGHT/2 - 24, c);
+        settextstyle(16, 0, "宋体");
+    }
     if (GAME_END) {
         // one-time progress update
-        if (!game_over_processed) { onGameOver(); game_over_processed = true; }
+        if (!game_over_processed) { onGameOver(); game_over_processed = true; if (GAME_MODE == MODE_LEVEL) { int idx = CURRENT_LEVEL - 1; if (idx >= 0 && idx < 9 && LEVEL_COMPLETE) level_unlocked[idx+1] = true; } }
 
         // Title
         putimage(game_over.x, game_over.y, &game_over.mask, SRCAND);
@@ -600,6 +626,7 @@ void gameUpdate() {
                 if (GAME_MODE == MODE_LEVEL && LEVEL_SELECT) {
                     // check clicks on level buttons
                     for (int i = 0; i < 10; i++) {
+                        if (!level_unlocked[i]) continue; // locked cannot click
                         if (msg.x > level_btns[i].x && msg.x < level_btns[i].x + level_btns[i].w &&
                             msg.y > level_btns[i].y && msg.y < level_btns[i].y + level_btns[i].h) {
                             CURRENT_LEVEL = i + 1;
@@ -649,6 +676,7 @@ void gameUpdate() {
             if (msg.x > btn_settings.x && msg.x < btn_settings.x + btn_settings.w &&
                 msg.y > btn_settings.y && msg.y < btn_settings.y + btn_settings.h) {
                 settings_open = !settings_open;
+                if (settings_open) { GAME_PAUSED = true; }
             }
             if (settings_open) {
                 auto hit = [&](RectBtn b){ return msg.x > b.x && msg.x < b.x + b.w && msg.y > b.y && msg.y < b.y + b.h; };
@@ -662,6 +690,11 @@ void gameUpdate() {
                 if (hit(btn_plus_thick)) { if (config_pipe_thickness < 200) { config_pipe_thickness += 5; applyConfig(); } }
                 if (hit(btn_toggle_bg)) { background_theme = 1 - background_theme; }
                 if (hit(btn_toggle_music)) { music_index = 1 - music_index; applyMusic(); }
+            } else {
+                // panel just closed, start countdown
+                if (GAME_PAUSED) {
+                    resume_countdown_frames = 3 * FPS;
+                }
             }
         }
     }
@@ -674,12 +707,14 @@ void gameUpdate() {
 
         // Bird speed & location
         // Bird will always fall, until reach the ground
-        if (bird.y + bird.size_y < ground.y) {
-            bird.y += bird.speed;
-            bird.speed += bird.g;
-        }
-        else {
-            GAME_END = TRUE;
+        if (!GAME_PAUSED && resume_countdown_frames == 0) {
+            if (bird.y + bird.size_y < ground.y) {
+                bird.y += bird.speed;
+                bird.speed += bird.g;
+            }
+            else {
+                GAME_END = TRUE;
+            }
         }
 
         if (GAME_END) {
@@ -728,40 +763,50 @@ void gameUpdate() {
 
 
         // Update ground
-        if (ground.x < -20) {                                       // Reset ground
-            ground.x = 0;
-        }
-        else {
-            ground.x -= ground.speed;
+        if (!GAME_PAUSED && resume_countdown_frames == 0) {
+            if (ground.x < -20) {                                       // Reset ground
+                ground.x = 0;
+            }
+            else {
+                ground.x -= ground.speed;
+            }
         }
 
 
         // Pipe
-        for (int i = 0; i < 2; i++) {
-            pipe_green.x[i] -= pipe_green.speed;
-            if (pipe_green.x[i] < -52) {
-                int j = i;
-                if (++j > 1) {
-                    j = 0;
-                }
-                pipe_green.x[i] = pipe_green.x[j] + 190;
-                pipe_green.y[i] = rand() % 250;                     // Reset pipe location
-                score.point += 1;                                   // Update score
-                if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
-                    if (score.point >= level_target) {
+        if (!GAME_PAUSED && resume_countdown_frames == 0) {
+            for (int i = 0; i < 2; i++) {
+                pipe_green.x[i] -= pipe_green.speed;
+                if (pipe_green.x[i] < -52) {
+                    int j = i;
+                    if (++j > 1) {
+                        j = 0;
+                    }
+                    pipe_green.x[i] = pipe_green.x[j] + 190;
+                    pipe_green.y[i] = rand() % 250;                     // Reset pipe location
+                    score.point += 1;                                   // Update score
+                    if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
+                        if (score.point >= level_target) {
                         LEVEL_COMPLETE = true;
-                        GAME_END = TRUE; // Treat as win end
+                            GAME_END = TRUE; // Treat as win end
+                        }
                     }
                 }
             }
         }
 
         // Level progression for level mode
-        if (GAME_MODE == MODE_LEVEL) {
+        if (GAME_MODE == MODE_LEVEL && !GAME_PAUSED && resume_countdown_frames == 0) {
             int newLevel = min(MAX_LEVEL, 1 + score.point / LEVEL_THRESHOLD);
             if (newLevel != CURRENT_LEVEL) {
                 CURRENT_LEVEL = newLevel;
                 setPipeThicknessPercent(calcLevelPipeThicknessPercent(CURRENT_LEVEL));
+            }
+        }
+        if (resume_countdown_frames > 0) {
+            resume_countdown_frames--;
+            if (resume_countdown_frames == 0) {
+                GAME_PAUSED = false;
             }
         }
         time1 = time2;
