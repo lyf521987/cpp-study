@@ -49,7 +49,7 @@ typedef struct Bird
     IMAGE image[3][2];
     IMAGE image_rotated[3][2];
 };
-int SPEED_UP = -12;
+int SPEED_UP = -8;
 int G = 1;
 Bird bird;
 
