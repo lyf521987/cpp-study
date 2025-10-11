@@ -43,6 +43,7 @@ IMAGE  background_night;
 int background_theme = 0; // 0-day, 1-night
 bool GAME_PAUSED = false;        // pause when settings open or countdown
 int resume_countdown_frames = 0; // 3*FPS frames countdown when resuming
+bool VICTORY = false;            // level victory state
 
 // Ground
 struct Ground
@@ -98,6 +99,8 @@ int LEVEL_TARGETS[10] = {5,10,13,16,19,22,25,28,31,34};
 int level_target = 0;
 bool LEVEL_COMPLETE = false;
 bool level_unlocked[10] = { true, false, false, false, false, false, false, false, false, false };
+bool level_stop_spawn = false;   // stop spawning new pipes after last one passed
+RectBtn btn_back;                // back button in level mode
 
 
 // Pipe
@@ -304,6 +307,7 @@ void gameInitValue() {
 
     GAME_START = FALSE;
     GAME_END = FALSE;
+    VICTORY = FALSE;
 
     // score
     score.point = 0;
@@ -394,6 +398,9 @@ void gameInitValue() {
     game_over_processed = false;
     GAME_PAUSED = false;
     resume_countdown_frames = 0;
+    level_stop_spawn = false;
+    // back button in level mode
+    btn_back.w = 72; btn_back.h = 28; btn_back.x = 10; btn_back.y = 10;
 }
 
 void gameDraw() {
@@ -447,22 +454,24 @@ void gameDraw() {
         putimage(title.x, title.y, &title.mask, SRCAND);
         putimage(title.x, title.y, &title.image, SRCPAINT);
 
-        // Mode selection buttons with color and border
-        setbkmode(TRANSPARENT);
-        // Endless button (blue)
-        setfillcolor(RGB(90, 170, 255));
-        solidrectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
-        setlinecolor(RGB(30, 100, 200));
-        rectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
-        settextcolor(RGB(255, 255, 255));
-        outtextxy(btn_mode_endless.x + 28, btn_mode_endless.y + 12, "无尽模式");
-        // Level button (green)
-        setfillcolor(RGB(110, 200, 100));
-        solidrectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
-        setlinecolor(RGB(60, 140, 60));
-        rectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
-        settextcolor(RGB(255, 255, 255));
-        outtextxy(btn_mode_level.x + 28, btn_mode_level.y + 12, "关卡模式");
+        // Mode selection buttons with color and border (hidden when choosing level)
+        if (GAME_MODE != MODE_LEVEL) {
+            setbkmode(TRANSPARENT);
+            // Endless button (blue)
+            setfillcolor(RGB(90, 170, 255));
+            solidrectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
+            setlinecolor(RGB(30, 100, 200));
+            rectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
+            settextcolor(RGB(255, 255, 255));
+            outtextxy(btn_mode_endless.x + 28, btn_mode_endless.y + 12, "无尽模式");
+            // Level button (green)
+            setfillcolor(RGB(110, 200, 100));
+            solidrectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
+            setlinecolor(RGB(60, 140, 60));
+            rectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
+            settextcolor(RGB(255, 255, 255));
+            outtextxy(btn_mode_level.x + 28, btn_mode_level.y + 12, "关卡模式");
+        }
 
         // If mode already chosen as LEVEL but not started, show level selection grid
         if (GAME_MODE == MODE_LEVEL) {
@@ -485,8 +494,8 @@ void gameDraw() {
         }
     }
     
-    // Endless settings gear (top-right) visible when endless mode selected and game not over
-    if (GAME_MODE == MODE_ENDLESS && !GAME_END) {
+    // Endless settings gear (top-right) visible only in endless mode during play
+    if (GAME_MODE == MODE_ENDLESS && GAME_START && !GAME_END) {
         // Draw circular gear-like button
         setfillcolor(RGB(255, 230, 120));
         solidcircle(btn_settings.x + btn_settings.w/2, btn_settings.y + btn_settings.h/2, btn_settings.w/2);
@@ -546,9 +555,14 @@ void gameDraw() {
         // one-time progress update
         if (!game_over_processed) { onGameOver(); game_over_processed = true; if (GAME_MODE == MODE_LEVEL) { int idx = CURRENT_LEVEL - 1; if (idx >= 0 && idx < 9 && LEVEL_COMPLETE) level_unlocked[idx+1] = true; } }
 
-        // Title
-        putimage(game_over.x, game_over.y, &game_over.mask, SRCAND);
-        putimage(game_over.x, game_over.y, &game_over.image, SRCPAINT);
+        // Title: Victory or Game Over
+        if (GAME_MODE == MODE_LEVEL && LEVEL_COMPLETE) {
+            settextcolor(RGB(255, 255, 0));
+            outtextxy(WIDTH/2 - 60, HEIGHT*0.18, "关卡胜利!");
+        } else {
+            putimage(game_over.x, game_over.y, &game_over.mask, SRCAND);
+            putimage(game_over.x, game_over.y, &game_over.image, SRCPAINT);
+        }
 
         // Score & Stars
         settextcolor(RGB(255, 255, 0));
@@ -699,6 +713,17 @@ void gameUpdate() {
         }
     }
 
+    // Back button in level mode (during play)
+    if (!GAME_END && GAME_MODE == MODE_LEVEL && GAME_START) {
+        if (msg.uMsg == WM_LBUTTONDOWN) {
+            if (msg.x > btn_back.x && msg.x < btn_back.x + btn_back.w && msg.y > btn_back.y && msg.y < btn_back.y + btn_back.h) {
+                GAME_MODE = MODE_NONE;
+                gameInitValue();
+                return;
+            }
+        }
+    }
+
 
 
     // Automatically update during each frame
@@ -782,12 +807,15 @@ void gameUpdate() {
                     if (++j > 1) {
                         j = 0;
                     }
-                    pipe_green.x[i] = pipe_green.x[j] + 190;
-                    pipe_green.y[i] = rand() % 250;                     // Reset pipe location
+                    if (!level_stop_spawn || GAME_MODE != MODE_LEVEL) {
+                        pipe_green.x[i] = pipe_green.x[j] + 190;
+                        pipe_green.y[i] = rand() % 250;                     // Reset pipe location
+                    }
                     score.point += 1;                                   // Update score
                     if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
                         if (score.point >= level_target) {
                         LEVEL_COMPLETE = true;
+                            level_stop_spawn = true;                     // stop generating new
                             GAME_END = TRUE; // Treat as win end
                         }
                     }
