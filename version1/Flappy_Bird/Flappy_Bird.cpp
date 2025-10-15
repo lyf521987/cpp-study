@@ -190,6 +190,9 @@ Text button_play;
 IMAGE btn_endless_img;
 IMAGE btn_level_img;
 
+// 添加关卡按钮图片变量
+IMAGE level_btn_images[10];
+
 
 // Progress & Achievements (simple persistence)
 int high_score = 0;
@@ -304,6 +307,18 @@ void gameInitResource() {
     // 加载按钮图片 - 修改为固定尺寸
     loadimage(&btn_endless_img, "img\\无尽模式.jpg", 140, 42);
     loadimage(&btn_level_img, "img\\关卡模式.jpg", 140, 42);
+
+    // 加载关卡按钮图片
+    for (int i = 0; i < 10; i++) {
+        char address[30];
+        if (i < 2) { // 1-2关使用.png格式
+            sprintf_s(address, "img\\%d.png", i + 1);
+        }
+        else { // 3-10关使用.jpg格式
+            sprintf_s(address, "img\\%d.jpg", i + 1);
+        }
+        loadimage(&level_btn_images[i], address, 56, 40); // 使用与原按钮相同的尺寸
+    }
 
     loadProgress();
 };
@@ -456,43 +471,19 @@ void gameDraw() {
         putimage(title.x, title.y, &title.mask, SRCAND);
         putimage(title.x, title.y, &title.image, SRCPAINT);
 
-        // Mode selection buttons - 使用图片按钮替换文本按钮
-        // 移除原有的文本按钮绘制代码
-        /*
-        // Mode selection buttons with color and border
-        setbkmode(TRANSPARENT);
-        // Endless button (blue)
-        setfillcolor(RGB(90, 170, 255));
-        solidrectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
-        setlinecolor(RGB(30, 100, 200));
-        rectangle(btn_mode_endless.x, btn_mode_endless.y, btn_mode_endless.x + btn_mode_endless.w, btn_mode_endless.y + btn_mode_endless.h);
-        settextcolor(RGB(255, 255, 255));
-        outtextxy(btn_mode_endless.x + 28, btn_mode_endless.y + 12, "无尽模式");
-        // Level button (green)
-        setfillcolor(RGB(110, 200, 100));
-        solidrectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
-        setlinecolor(RGB(60, 140, 60));
-        rectangle(btn_mode_level.x, btn_mode_level.y, btn_mode_level.x + btn_mode_level.w, btn_mode_level.y + btn_mode_level.h);
-        settextcolor(RGB(255, 255, 255));
-        outtextxy(btn_mode_level.x + 28, btn_mode_level.y + 12, "关卡模式");
-        */
+        // 只在未选择模式时显示模式选择按钮
+        if (GAME_MODE == MODE_NONE) {
+            // 使用图片按钮替代文本按钮
+            putimage(btn_mode_endless.x, btn_mode_endless.y, &btn_endless_img);
+            putimage(btn_mode_level.x, btn_mode_level.y, &btn_level_img);
+        }
 
-        // 使用图片按钮替代文本按钮 - 修改为正确的函数调用方式
-        putimage(btn_mode_endless.x, btn_mode_endless.y, &btn_endless_img);
-        putimage(btn_mode_level.x, btn_mode_level.y, &btn_level_img);
-
-        // If mode already chosen as LEVEL but not started, show level selection grid
+        // 如果选择了关卡模式，显示关卡选择界面
         if (GAME_MODE == MODE_LEVEL) {
-            // 添加透明背景设置，消除文本黑色色块
-            setbkmode(TRANSPARENT);
-            setfillcolor(RGB(245, 245, 245));
+            // 使用图片按钮替代文本按钮
             for (int i = 0; i < 10; i++) {
-                solidrectangle(level_btns[i].x, level_btns[i].y, level_btns[i].x + level_btns[i].w, level_btns[i].y + level_btns[i].h);
-                setlinecolor(RGB(120, 120, 120));
-                rectangle(level_btns[i].x, level_btns[i].y, level_btns[i].x + level_btns[i].w, level_btns[i].y + level_btns[i].h);
-                char num[8]; sprintf_s(num, "%d", i + 1);
-                settextcolor(RGB(0, 0, 0));
-                outtextxy(level_btns[i].x + 20, level_btns[i].y + 10, num);
+                // 直接绘制图片按钮
+                putimage(level_btns[i].x, level_btns[i].y, &level_btn_images[i]);
             }
         }
     }
