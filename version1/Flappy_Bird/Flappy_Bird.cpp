@@ -541,7 +541,33 @@ void gameDraw() {
         }
 
         // 如果选择了关卡模式，显示关卡选择界面
+        // 在关卡模式界面绘制返回按钮（大约第540行附近）
         if (GAME_MODE == MODE_LEVEL) {
+            // 设置加粗字体
+            settextstyle(16, 0, "微软雅黑", 0, 0, 400, false, false, false); // 最后一个参数是字体加粗
+            
+            // 计算文本宽度
+            const char* text = "返回主界面";
+            RECT r = {0, 0, 0, 0};
+            drawtext(text, &r, DT_CALCRECT); // 计算文本所需的矩形区域
+            int textWidth = r.right - r.left;
+            int padding = 8; // 文本两侧的内边距
+            
+            // 设置按钮尺寸，使其宽度与文本长度匹配（加上内边距）
+            btn_back.w = textWidth + padding * 2;
+            btn_back.h = 28;
+            
+            // 绘制灰色背景
+            setfillcolor(RGB(200, 200, 200)); // 灰色背景
+            solidrectangle(btn_back.x, btn_back.y, btn_back.x + btn_back.w, btn_back.y + btn_back.h);
+            
+            // 绘制黑色加粗字体
+            settextcolor(RGB(0, 0, 0)); // 黑色字体
+            outtextxy(btn_back.x + padding, btn_back.y + 5, text);
+            
+            // 恢复默认字体样式
+            settextstyle(16, 0, "宋体", 0, 0, 400, false, false, false);
+            
             // 使用图片按钮替代文本按钮
             for (int i = 0; i < 10; i++) {
                 // 直接绘制图片按钮
@@ -777,6 +803,21 @@ void gameUpdate() {
         }
     }
 
+    // 在鼠标事件处理中添加返回按钮的点击逻辑（大约第780行附近）
+    // 在Settings panel处理之前添加关卡模式的返回按钮处理
+    if (GAME_MODE == MODE_LEVEL && !GAME_START) {
+    if (msg.uMsg == WM_LBUTTONDOWN) {
+    // 检查是否点击了返回按钮
+    if (msg.x > btn_back.x && msg.x < btn_back.x + btn_back.w && 
+    msg.y > btn_back.y && msg.y < btn_back.y + btn_back.h) {
+    // 返回主界面：重置游戏模式为无模式
+    GAME_MODE = MODE_NONE;
+    // 重新初始化游戏值，返回到开始界面
+    gameInitValue();
+    }
+    }
+    }
+    
     // Settings panel and gear click handling when in endless mode - 保持原点击逻辑不变
     if (GAME_MODE == MODE_ENDLESS && !GAME_END) {
         if (msg.uMsg == WM_LBUTTONDOWN) {
