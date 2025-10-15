@@ -104,9 +104,9 @@ bool level_unlocked[10] = { true, false, false, false, false, false, false, fals
 bool level_stop_spawn = false;   // stop spawning new pipes after last one passed
 RectBtn btn_back;                // back button in level mode
 bool level_last_phase = false;   // enter last phase after target reached
-int pipe_base_y[2] = { 0,0 };
-int pipe_osc_offset[2] = { 0,0 };
-int pipe_osc_dir[2] = { 1,1 };
+int pipe_base_y[2] = {0,0};
+int pipe_osc_offset[2] = {0,0};
+int pipe_osc_dir[2] = {1,1};
 
 
 // Pipe
@@ -221,7 +221,7 @@ struct EnemyBird {
     int x; int y; int w; int h; int speed;
     bool active;
 };
-EnemyBird enemy_bird = { 0, 0, 32, 24, 5, false };
+EnemyBird enemy_bird = {0, 0, 32, 24, 5, false};
 IMAGE enemy_img; IMAGE enemy_mask;
 
 // Coins
@@ -551,16 +551,16 @@ void gameDraw() {
         outtextxy(px + 12, py + 8, "无尽设置");
         // Lines: horz speed, gravity, jump, thickness, bg, music
         int ly = py + 32;
-        auto drawRow = [&](const char* label, int value, RectBtn& minusBtn, RectBtn& plusBtn) {
+        auto drawRow = [&](const char* label, int value, RectBtn& minusBtn, RectBtn& plusBtn){
             // label with small background
-            setfillcolor(RGB(245, 245, 245));
+            setfillcolor(RGB(245,245,245));
             solidrectangle(px + 6, ly - 2, px + 100, ly + 20);
-            settextcolor(RGB(40, 40, 40));
+            settextcolor(RGB(40,40,40));
             outtextxy(px + 10, ly, label);
             char buf[16]; sprintf_s(buf, "%d", value);
             setfillcolor(RGB(235, 250, 235));
             solidrectangle(px + 106, ly - 2, px + 146, ly + 20);
-            settextcolor(RGB(20, 80, 20));
+            settextcolor(RGB(20,80,20));
             outtextxy(px + 110, ly, buf);
             minusBtn.x = px + 150; minusBtn.y = ly; minusBtn.w = 20; minusBtn.h = 20;
             plusBtn.x = px + 175; plusBtn.y = ly; plusBtn.w = 20; plusBtn.h = 20;
@@ -576,11 +576,11 @@ void gameDraw() {
         drawRow("管子粗细%", config_pipe_thickness, btn_minus_thick, btn_plus_thick);
         // Toggles
         btn_toggle_bg.x = px + 10; btn_toggle_bg.y = ly; btn_toggle_bg.w = 90; btn_toggle_bg.h = 22;
-        setfillcolor(RGB(230, 240, 255));
+        setfillcolor(RGB(230,240,255));
         solidrectangle(btn_toggle_bg.x, btn_toggle_bg.y, btn_toggle_bg.x + btn_toggle_bg.w, btn_toggle_bg.y + btn_toggle_bg.h);
         outtextxy(btn_toggle_bg.x + 10, btn_toggle_bg.y + 2, background_theme == 0 ? "白天" : "夜晚");
         btn_toggle_music.x = px + 110; btn_toggle_music.y = ly; btn_toggle_music.w = 90; btn_toggle_music.h = 22;
-        setfillcolor(RGB(230, 255, 235));
+        setfillcolor(RGB(230,255,235));
         solidrectangle(btn_toggle_music.x, btn_toggle_music.y, btn_toggle_music.x + btn_toggle_music.w, btn_toggle_music.y + btn_toggle_music.h);
         outtextxy(btn_toggle_music.x + 10, btn_toggle_music.y + 2, music_index == 0 ? "音乐1" : "音乐2");
     }
@@ -588,9 +588,9 @@ void gameDraw() {
     if (resume_countdown_frames > 0) {
         int seconds = (resume_countdown_frames + FPS - 1) / FPS;
         settextstyle(48, 0, "微软雅黑");
-        settextcolor(RGB(255, 255, 255));
+        settextcolor(RGB(255,255,255));
         char c[4]; sprintf_s(c, "%d", seconds);
-        outtextxy(WIDTH / 2 - 12, HEIGHT / 2 - 24, c);
+        outtextxy(WIDTH/2 - 12, HEIGHT/2 - 24, c);
         settextstyle(16, 0, "宋体");
     }
     // Draw enemy bird
@@ -600,7 +600,7 @@ void gameDraw() {
     }
     // Draw coins
     if (GAME_START && !GAME_END) {
-        for (auto& co : coins) {
+        for (auto &co : coins) {
             if (co.taken) continue;
             int rr = co.r + (co.frame % 10 < 5 ? 1 : -1); // simple pulsate
             setfillcolor(RGB(255, 215, 0));
@@ -646,9 +646,9 @@ void gameDraw() {
         // High score and coins
         settextcolor(RGB(230, 240, 255));
         char best[32]; sprintf_s(best, "历史最高分: %d", high_score);
-        outtextxy(WIDTH / 2 - 90, HEIGHT * 0.50, best);
+        outtextxy(WIDTH/2 - 90, HEIGHT*0.50, best);
         char coinbuf[32]; sprintf_s(coinbuf, "本关金币: %d", coins_collected);
-        settextcolor(RGB(255, 230, 120)); outtextxy(WIDTH / 2 - 80, HEIGHT * 0.46, coinbuf);
+        settextcolor(RGB(255, 230, 120)); outtextxy(WIDTH/2 - 80, HEIGHT*0.46, coinbuf);
 
         // Level bar from total_exp
         int level = total_exp / 50 + 1;
@@ -870,7 +870,7 @@ void gameUpdate() {
             if ((int)coins.size() < 3 && rand() % 120 == 0) {
                 Coin c; c.x = WIDTH + 20; c.y = 80 + rand() % 260; c.r = 6; c.frame = 0; c.taken = false; coins.push_back(c);
             }
-            for (auto& co : coins) {
+            for (auto &co : coins) {
                 if (co.taken) continue;
                 co.x -= SPEED_PIPE;
                 // pickup check
@@ -880,7 +880,7 @@ void gameUpdate() {
                 }
             }
             // remove off-screen/taken coins to keep vector small
-            coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const Coin& c) { return c.taken || c.x + c.r < 0; }), coins.end());
+            coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const Coin &c){ return c.taken || c.x + c.r < 0; }), coins.end());
         }
 
 
@@ -918,7 +918,7 @@ void gameUpdate() {
                     score.point += 1;                                   // Update score
                     if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
                         if (score.point >= level_target) {
-                            LEVEL_COMPLETE = true;
+                        LEVEL_COMPLETE = true;
                             level_stop_spawn = true;                     // stop generating new
                             GAME_END = TRUE; // Treat as win end
                             level_last_phase = true;                     // enable vertical oscillation
