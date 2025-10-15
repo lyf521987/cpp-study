@@ -5,6 +5,7 @@
 #include <string> 
 #include <string.h>
 #include <algorithm>
+#include <vector>
 #include <fstream>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
@@ -41,6 +42,10 @@ IMAGE  background;
 IMAGE  background_day;
 IMAGE  background_night;
 int background_theme = 0; // 0-day, 1-night
+bool GAME_PAUSED = false;        // pause when settings open or countdown
+int resume_countdown_frames = 0; // 3*FPS frames countdown when resuming
+bool VICTORY = false;            // level victory state
+int LEVEL_STARTED = 1;           // level actually started (for unlock)
 
 // Ground
 struct Ground
@@ -95,6 +100,13 @@ RectBtn level_btns[10];
 int LEVEL_TARGETS[10] = { 5,10,13,16,19,22,25,28,31,34 };
 int level_target = 0;
 bool LEVEL_COMPLETE = false;
+bool level_unlocked[10] = { true, false, false, false, false, false, false, false, false, false };
+bool level_stop_spawn = false;   // stop spawning new pipes after last one passed
+RectBtn btn_back;                // back button in level mode
+bool level_last_phase = false;   // enter last phase after target reached
+int pipe_base_y[2] = { 0,0 };
+int pipe_osc_offset[2] = { 0,0 };
+int pipe_osc_dir[2] = { 1,1 };
 
 
 // Pipe
@@ -204,6 +216,20 @@ RectBtn btn_go_menu;     // 返回主菜单
 RectBtn btn_restart;     // 重玩
 RectBtn btn_view_achv;   // 查看成就
 
+// Enemy bird (black) from level 4
+struct EnemyBird {
+    int x; int y; int w; int h; int speed;
+    bool active;
+};
+EnemyBird enemy_bird = { 0, 0, 32, 24, 5, false };
+IMAGE enemy_img; IMAGE enemy_mask;
+
+// Coins
+struct Coin { int x; int y; int r; int frame; bool taken; };
+std::vector<Coin> coins;
+int coins_collected = 0;
+IMAGE coin_img;
+
 void loadProgress()
 {
     std::ifstream fin("save.dat", std::ios::in | std::ios::binary);
@@ -271,6 +297,11 @@ void gameInitResource() {
     loadimage(&pipe_green.mask[0], "img/pipe_green_top_mask.png");
     loadimage(&pipe_green.image[1], "img/pipe_green_down.png");
     loadimage(&pipe_green.mask[1], "img/pipe_green_down_mask.png");
+
+    // Enemy bird & coin resources (fallback to simple recolor if not exists)
+    loadimage(&enemy_img, "img/all_img/bird_oriange.png");
+    loadimage(&enemy_mask, "img/all_img/black.png");
+    loadimage(&coin_img, "img/all_img/medals.png");
 
     // Record base sizes for thickness scaling
     pipe_green.base_size_x[0] = pipe_green.image[0].getwidth();
@@ -418,6 +449,15 @@ void gameInitValue() {
     btn_restart.x = baseX + bw + spacing; btn_restart.y = baseY;
     btn_view_achv.x = baseX + (bw + spacing) * 2; btn_view_achv.y = baseY;
     game_over_processed = false;
+    GAME_PAUSED = false;
+    resume_countdown_frames = 0;
+    level_stop_spawn = false;
+    // back button in level mode
+    btn_back.w = 72; btn_back.h = 28; btn_back.x = 10; btn_back.y = 10;
+
+    // enemy bird & coins reset
+    enemy_bird.active = false;
+    coins.clear(); coins_collected = 0;
 }
 
 void gameDraw() {
@@ -504,12 +544,23 @@ void gameDraw() {
         setfillcolor(RGB(255, 255, 255));
         solidrectangle(px, py, px + pw, py + ph);
         settextcolor(RGB(0, 0, 0));
-        outtextxy(px + 10, py + 8, "无尽设置");
+        // Panel header with background capsule for better readability
+        setfillcolor(RGB(240, 240, 255));
+        solidrectangle(px + 6, py + 6, px + pw - 6, py + 28);
+        settextcolor(RGB(60, 60, 120));
+        outtextxy(px + 12, py + 8, "无尽设置");
         // Lines: horz speed, gravity, jump, thickness, bg, music
         int ly = py + 32;
         auto drawRow = [&](const char* label, int value, RectBtn& minusBtn, RectBtn& plusBtn) {
+            // label with small background
+            setfillcolor(RGB(245, 245, 245));
+            solidrectangle(px + 6, ly - 2, px + 100, ly + 20);
+            settextcolor(RGB(40, 40, 40));
             outtextxy(px + 10, ly, label);
             char buf[16]; sprintf_s(buf, "%d", value);
+            setfillcolor(RGB(235, 250, 235));
+            solidrectangle(px + 106, ly - 2, px + 146, ly + 20);
+            settextcolor(RGB(20, 80, 20));
             outtextxy(px + 110, ly, buf);
             minusBtn.x = px + 150; minusBtn.y = ly; minusBtn.w = 20; minusBtn.h = 20;
             plusBtn.x = px + 175; plusBtn.y = ly; plusBtn.w = 20; plusBtn.h = 20;
@@ -525,15 +576,54 @@ void gameDraw() {
         drawRow("管子粗细%", config_pipe_thickness, btn_minus_thick, btn_plus_thick);
         // Toggles
         btn_toggle_bg.x = px + 10; btn_toggle_bg.y = ly; btn_toggle_bg.w = 90; btn_toggle_bg.h = 22;
+        setfillcolor(RGB(230, 240, 255));
         solidrectangle(btn_toggle_bg.x, btn_toggle_bg.y, btn_toggle_bg.x + btn_toggle_bg.w, btn_toggle_bg.y + btn_toggle_bg.h);
         outtextxy(btn_toggle_bg.x + 10, btn_toggle_bg.y + 2, background_theme == 0 ? "白天" : "夜晚");
         btn_toggle_music.x = px + 110; btn_toggle_music.y = ly; btn_toggle_music.w = 90; btn_toggle_music.h = 22;
+        setfillcolor(RGB(230, 255, 235));
         solidrectangle(btn_toggle_music.x, btn_toggle_music.y, btn_toggle_music.x + btn_toggle_music.w, btn_toggle_music.y + btn_toggle_music.h);
         outtextxy(btn_toggle_music.x + 10, btn_toggle_music.y + 2, music_index == 0 ? "音乐1" : "音乐2");
     }
+    // Countdown overlay when resuming
+    if (resume_countdown_frames > 0) {
+        int seconds = (resume_countdown_frames + FPS - 1) / FPS;
+        settextstyle(48, 0, "微软雅黑");
+        settextcolor(RGB(255, 255, 255));
+        char c[4]; sprintf_s(c, "%d", seconds);
+        outtextxy(WIDTH / 2 - 12, HEIGHT / 2 - 24, c);
+        settextstyle(16, 0, "宋体");
+    }
+    // Draw enemy bird
+    if (enemy_bird.active && GAME_START && !GAME_END) {
+        putimage(enemy_bird.x, enemy_bird.y, &enemy_mask, SRCAND);
+        putimage(enemy_bird.x, enemy_bird.y, &enemy_img, SRCPAINT);
+    }
+    // Draw coins
+    if (GAME_START && !GAME_END) {
+        for (auto& co : coins) {
+            if (co.taken) continue;
+            int rr = co.r + (co.frame % 10 < 5 ? 1 : -1); // simple pulsate
+            setfillcolor(RGB(255, 215, 0));
+            solidcircle(co.x, co.y, rr);
+            co.frame = (co.frame + 1) % 10;
+        }
+        settextcolor(RGB(255, 255, 0));
+        char cbuf[32]; sprintf_s(cbuf, "金币:%d", coins_collected);
+        outtextxy(10, 40, cbuf);
+    }
     if (GAME_END) {
         // one-time progress update
-        if (!game_over_processed) { onGameOver(); game_over_processed = true; }
+        if (!game_over_processed) {
+            onGameOver();
+            game_over_processed = true;
+            if (GAME_MODE == MODE_LEVEL) {
+                int idx = LEVEL_STARTED - 1; // strictly use started level index
+                if (idx >= 0 && idx < 9 && LEVEL_COMPLETE) {
+                    // unlock exactly the next after the started level
+                    level_unlocked[idx + 1] = true;
+                }
+            }
+        }
 
         // Title
         putimage(game_over.x, game_over.y, &game_over.mask, SRCAND);
@@ -553,10 +643,12 @@ void gameDraw() {
             solidcircle(WIDTH / 2 - 60 + i * 60, HEIGHT * 0.42, 12);
         }
 
-        // High score
-        settextcolor(RGB(255, 255, 255));
+        // High score and coins
+        settextcolor(RGB(230, 240, 255));
         char best[32]; sprintf_s(best, "历史最高分: %d", high_score);
         outtextxy(WIDTH / 2 - 90, HEIGHT * 0.50, best);
+        char coinbuf[32]; sprintf_s(coinbuf, "本关金币: %d", coins_collected);
+        settextcolor(RGB(255, 230, 120)); outtextxy(WIDTH / 2 - 80, HEIGHT * 0.46, coinbuf);
 
         // Level bar from total_exp
         int level = total_exp / 50 + 1;
@@ -621,12 +713,18 @@ void gameUpdate() {
                         if (msg.x > level_btns[i].x && msg.x < level_btns[i].x + level_btns[i].w &&
                             msg.y > level_btns[i].y && msg.y < level_btns[i].y + level_btns[i].h) {
                             CURRENT_LEVEL = i + 1;
+                            LEVEL_STARTED = CURRENT_LEVEL; // record started level
                             level_target = LEVEL_TARGETS[i];
                             setPipeThicknessPercent(calcLevelPipeThicknessPercent(CURRENT_LEVEL));
                             LEVEL_SELECT = false;
                             GAME_START = TRUE;
                             bird.g = G;
                             pipe_green.speed = SPEED_PIPE;
+                            // init oscillation base y
+                            pipe_base_y[0] = pipe_green.y[0];
+                            pipe_base_y[1] = pipe_green.y[1];
+                            pipe_osc_offset[0] = pipe_osc_offset[1] = 0;
+                            pipe_osc_dir[0] = pipe_osc_dir[1] = 1;
                         }
                     }
                 }
@@ -741,9 +839,48 @@ void gameUpdate() {
                 std::cout << bird.y << ' ' << pipe_green.y[0] << ' ' << pipe_green.size_y[0] << std::endl;
                 std::cout << "collision" << std::endl;
 #endif
-                bird.speed = SPEED_UP / 2;              // Add a little jump as ending scene
-                GAME_END = TRUE;
+                if (!(GAME_MODE == MODE_LEVEL && LEVEL_COMPLETE)) {
+                    bird.speed = SPEED_UP / 2;              // Add a little jump as ending scene
+                    GAME_END = TRUE;
+                }
             }
+        }
+
+        // Enemy bird spawn and collision (from level 4)
+        if (GAME_MODE == MODE_LEVEL && CURRENT_LEVEL >= 4 && !GAME_END && !GAME_PAUSED && resume_countdown_frames == 0) {
+            if (!enemy_bird.active && rand() % 200 == 0) {
+                enemy_bird.active = true;
+                enemy_bird.x = WIDTH;
+                enemy_bird.y = 80 + rand() % 240;
+                enemy_bird.speed = 5 + rand() % 3;
+            }
+            if (enemy_bird.active) {
+                enemy_bird.x -= enemy_bird.speed;
+                // collision AABB
+                if (bird.x < enemy_bird.x + enemy_bird.w && bird.x + bird.size_x > enemy_bird.x &&
+                    bird.y < enemy_bird.y + enemy_bird.h && bird.y + bird.size_y > enemy_bird.y) {
+                    GAME_END = TRUE;
+                }
+                if (enemy_bird.x + enemy_bird.w < 0) enemy_bird.active = false;
+            }
+        }
+
+        // Coins spawn and pickup (in level mode only)
+        if (GAME_MODE == MODE_LEVEL && !GAME_END && !GAME_PAUSED && resume_countdown_frames == 0) {
+            if ((int)coins.size() < 3 && rand() % 120 == 0) {
+                Coin c; c.x = WIDTH + 20; c.y = 80 + rand() % 260; c.r = 6; c.frame = 0; c.taken = false; coins.push_back(c);
+            }
+            for (auto& co : coins) {
+                if (co.taken) continue;
+                co.x -= SPEED_PIPE;
+                // pickup check
+                if (bird.x < co.x + co.r && bird.x + bird.size_x > co.x - co.r &&
+                    bird.y < co.y + co.r && bird.y + bird.size_y > co.y - co.r) {
+                    co.taken = true; coins_collected++;
+                }
+            }
+            // remove off-screen/taken coins to keep vector small
+            coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const Coin& c) { return c.taken || c.x + c.r < 0; }), coins.end());
         }
 
 
@@ -757,20 +894,35 @@ void gameUpdate() {
 
 
         // Pipe
-        for (int i = 0; i < 2; i++) {
-            pipe_green.x[i] -= pipe_green.speed;
-            if (pipe_green.x[i] < -52) {
-                int j = i;
-                if (++j > 1) {
-                    j = 0;
+        if (!GAME_PAUSED && resume_countdown_frames == 0) {
+            for (int i = 0; i < 2; i++) {
+                pipe_green.x[i] -= pipe_green.speed;
+                // last phase: allow slight vertical oscillation on the remaining pipes
+                if (GAME_MODE == MODE_LEVEL && level_last_phase) {
+                    pipe_osc_offset[i] += pipe_osc_dir[i];
+                    if (pipe_osc_offset[i] > 20 || pipe_osc_offset[i] < -20) pipe_osc_dir[i] = -pipe_osc_dir[i];
+                    pipe_green.y[i] = pipe_base_y[i] + pipe_osc_offset[i];
                 }
-                pipe_green.x[i] = pipe_green.x[j] + 190;
-                pipe_green.y[i] = rand() % 250;                     // Reset pipe location
-                score.point += 1;                                   // Update score
-                if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
-                    if (score.point >= level_target) {
-                        LEVEL_COMPLETE = true;
-                        GAME_END = TRUE; // Treat as win end
+                if (pipe_green.x[i] < -52) {
+                    int j = i;
+                    if (++j > 1) {
+                        j = 0;
+                    }
+                    if (!level_stop_spawn || GAME_MODE != MODE_LEVEL) {
+                        pipe_green.x[i] = pipe_green.x[j] + 190;
+                        pipe_green.y[i] = rand() % 250;                     // Reset pipe location
+                        // reset oscillation base for new pipe
+                        pipe_base_y[i] = pipe_green.y[i];
+                        pipe_osc_offset[i] = 0; pipe_osc_dir[i] = 1;
+                    }
+                    score.point += 1;                                   // Update score
+                    if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
+                        if (score.point >= level_target) {
+                            LEVEL_COMPLETE = true;
+                            level_stop_spawn = true;                     // stop generating new
+                            GAME_END = TRUE; // Treat as win end
+                            level_last_phase = true;                     // enable vertical oscillation
+                        }
                     }
                 }
             }
