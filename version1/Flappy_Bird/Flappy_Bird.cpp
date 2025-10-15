@@ -33,6 +33,9 @@ RectBtn btn_mode_level;
 RectBtn btn_settings;            // endless settings gear button (top-right)
 bool settings_open = false;
 
+// 新增：设置按钮图片变量
+IMAGE btn_settings_img;
+
 // Window
 int WIDTH = 0;
 int HEIGHT = 0;
@@ -104,9 +107,9 @@ bool level_unlocked[10] = { true, false, false, false, false, false, false, fals
 bool level_stop_spawn = false;   // stop spawning new pipes after last one passed
 RectBtn btn_back;                // back button in level mode
 bool level_last_phase = false;   // enter last phase after target reached
-int pipe_base_y[2] = {0,0};
-int pipe_osc_offset[2] = {0,0};
-int pipe_osc_dir[2] = {1,1};
+int pipe_base_y[2] = { 0,0 };
+int pipe_osc_offset[2] = { 0,0 };
+int pipe_osc_dir[2] = { 1,1 };
 
 
 // Pipe
@@ -221,7 +224,7 @@ struct EnemyBird {
     int x; int y; int w; int h; int speed;
     bool active;
 };
-EnemyBird enemy_bird = {0, 0, 32, 24, 5, false};
+EnemyBird enemy_bird = { 0, 0, 32, 24, 5, false };
 IMAGE enemy_img; IMAGE enemy_mask;
 
 // Coins
@@ -302,6 +305,22 @@ void gameInitResource() {
     loadimage(&enemy_img, "img/all_img/bird_oriange.png");
     loadimage(&enemy_mask, "img/all_img/black.png");
     loadimage(&coin_img, "img/all_img/medals.png");
+
+    // 新增：加载设置按钮图片，使用原按钮尺寸
+    // 1. 首先，在gameInitResource函数中，移除使用未初始化变量的加载代码
+    // 将这行代码：
+    // loadimage(&btn_settings_img, "img\设置.png", btn_settings.w, btn_settings.h);
+    // 替换为使用固定尺寸：
+    loadimage(&btn_settings_img, "img\\设置.png", 32, 32);
+
+    // 2. 或者，更好的做法是将设置按钮图片的加载移到gameInitValue函数中，确保在尺寸初始化后加载
+    // 在gameInitValue函数中，在初始化btn_settings尺寸后添加：
+    // Settings gear button (top-right) - 保持原位置和尺寸不变
+    btn_settings.w = 32; btn_settings.h = 32;
+    btn_settings.x = WIDTH - btn_settings.w - 10;
+    btn_settings.y = 10;
+    // 添加这行代码来加载图片
+    loadimage(&btn_settings_img, "img\\设置.png", btn_settings.w, btn_settings.h);
 
     // Record base sizes for thickness scaling
     pipe_green.base_size_x[0] = pipe_green.image[0].getwidth();
@@ -419,7 +438,7 @@ void gameInitValue() {
     btn_mode_endless.y = HEIGHT * 0.65;
     btn_mode_level.y = HEIGHT * 0.65;
 
-    // Settings gear button (top-right)
+    // Settings gear button (top-right) - 保持原位置和尺寸不变
     btn_settings.w = 32; btn_settings.h = 32;
     btn_settings.x = WIDTH - btn_settings.w - 10;
     btn_settings.y = 10;
@@ -462,6 +481,9 @@ void gameInitValue() {
 
 void gameDraw() {
     BeginBatchDraw();                                               // Start drawing
+    // 在绘制开始时设置文本背景为透明
+    setbkmode(TRANSPARENT);
+
     // Background theme
     if (background_theme == 0) putimage(0, 0, &background_day);
     else putimage(0, 0, &background_night);
@@ -528,14 +550,9 @@ void gameDraw() {
         }
     }
 
-    // Endless settings gear (top-right) visible when endless mode selected and game not over
+    // 修改：将文字按钮替换为图片按钮，保持位置和尺寸不变
     if (GAME_MODE == MODE_ENDLESS && !GAME_END) {
-        setfillcolor(RGB(255, 230, 120));
-        solidrectangle(btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
-        setlinecolor(RGB(180, 140, 40));
-        rectangle(btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
-        settextcolor(RGB(50, 40, 20));
-        outtextxy(btn_settings.x + 10, btn_settings.y + 12, "设置");
+        putimage(btn_settings.x, btn_settings.y, &btn_settings_img);
     }
 
     // Settings panel overlay
@@ -551,16 +568,16 @@ void gameDraw() {
         outtextxy(px + 12, py + 8, "无尽设置");
         // Lines: horz speed, gravity, jump, thickness, bg, music
         int ly = py + 32;
-        auto drawRow = [&](const char* label, int value, RectBtn& minusBtn, RectBtn& plusBtn){
+        auto drawRow = [&](const char* label, int value, RectBtn& minusBtn, RectBtn& plusBtn) {
             // label with small background
-            setfillcolor(RGB(245,245,245));
+            setfillcolor(RGB(245, 245, 245));
             solidrectangle(px + 6, ly - 2, px + 100, ly + 20);
-            settextcolor(RGB(40,40,40));
+            settextcolor(RGB(40, 40, 40));
             outtextxy(px + 10, ly, label);
             char buf[16]; sprintf_s(buf, "%d", value);
             setfillcolor(RGB(235, 250, 235));
             solidrectangle(px + 106, ly - 2, px + 146, ly + 20);
-            settextcolor(RGB(20,80,20));
+            settextcolor(RGB(20, 80, 20));
             outtextxy(px + 110, ly, buf);
             minusBtn.x = px + 150; minusBtn.y = ly; minusBtn.w = 20; minusBtn.h = 20;
             plusBtn.x = px + 175; plusBtn.y = ly; plusBtn.w = 20; plusBtn.h = 20;
@@ -576,11 +593,11 @@ void gameDraw() {
         drawRow("管子粗细%", config_pipe_thickness, btn_minus_thick, btn_plus_thick);
         // Toggles
         btn_toggle_bg.x = px + 10; btn_toggle_bg.y = ly; btn_toggle_bg.w = 90; btn_toggle_bg.h = 22;
-        setfillcolor(RGB(230,240,255));
+        setfillcolor(RGB(230, 240, 255));
         solidrectangle(btn_toggle_bg.x, btn_toggle_bg.y, btn_toggle_bg.x + btn_toggle_bg.w, btn_toggle_bg.y + btn_toggle_bg.h);
         outtextxy(btn_toggle_bg.x + 10, btn_toggle_bg.y + 2, background_theme == 0 ? "白天" : "夜晚");
         btn_toggle_music.x = px + 110; btn_toggle_music.y = ly; btn_toggle_music.w = 90; btn_toggle_music.h = 22;
-        setfillcolor(RGB(230,255,235));
+        setfillcolor(RGB(230, 255, 235));
         solidrectangle(btn_toggle_music.x, btn_toggle_music.y, btn_toggle_music.x + btn_toggle_music.w, btn_toggle_music.y + btn_toggle_music.h);
         outtextxy(btn_toggle_music.x + 10, btn_toggle_music.y + 2, music_index == 0 ? "音乐1" : "音乐2");
     }
@@ -588,9 +605,9 @@ void gameDraw() {
     if (resume_countdown_frames > 0) {
         int seconds = (resume_countdown_frames + FPS - 1) / FPS;
         settextstyle(48, 0, "微软雅黑");
-        settextcolor(RGB(255,255,255));
+        settextcolor(RGB(255, 255, 255));
         char c[4]; sprintf_s(c, "%d", seconds);
-        outtextxy(WIDTH/2 - 12, HEIGHT/2 - 24, c);
+        outtextxy(WIDTH / 2 - 12, HEIGHT / 2 - 24, c);
         settextstyle(16, 0, "宋体");
     }
     // Draw enemy bird
@@ -600,7 +617,7 @@ void gameDraw() {
     }
     // Draw coins
     if (GAME_START && !GAME_END) {
-        for (auto &co : coins) {
+        for (auto& co : coins) {
             if (co.taken) continue;
             int rr = co.r + (co.frame % 10 < 5 ? 1 : -1); // simple pulsate
             setfillcolor(RGB(255, 215, 0));
@@ -646,9 +663,9 @@ void gameDraw() {
         // High score and coins
         settextcolor(RGB(230, 240, 255));
         char best[32]; sprintf_s(best, "历史最高分: %d", high_score);
-        outtextxy(WIDTH/2 - 90, HEIGHT*0.50, best);
+        outtextxy(WIDTH / 2 - 90, HEIGHT * 0.50, best);
         char coinbuf[32]; sprintf_s(coinbuf, "本关金币: %d", coins_collected);
-        settextcolor(RGB(255, 230, 120)); outtextxy(WIDTH/2 - 80, HEIGHT*0.46, coinbuf);
+        settextcolor(RGB(255, 230, 120)); outtextxy(WIDTH / 2 - 80, HEIGHT * 0.46, coinbuf);
 
         // Level bar from total_exp
         int level = total_exp / 50 + 1;
@@ -760,13 +777,15 @@ void gameUpdate() {
         }
     }
 
-    // Settings panel and gear click handling when in endless mode
+    // Settings panel and gear click handling when in endless mode - 保持原点击逻辑不变
     if (GAME_MODE == MODE_ENDLESS && !GAME_END) {
         if (msg.uMsg == WM_LBUTTONDOWN) {
             // Toggle panel
             if (msg.x > btn_settings.x && msg.x < btn_settings.x + btn_settings.w &&
                 msg.y > btn_settings.y && msg.y < btn_settings.y + btn_settings.h) {
                 settings_open = !settings_open;
+                // 添加这行代码，同步更新游戏暂停状态
+                GAME_PAUSED = settings_open;
             }
             if (settings_open) {
                 auto hit = [&](RectBtn b) { return msg.x > b.x && msg.x < b.x + b.w && msg.y > b.y && msg.y < b.y + b.h; };
@@ -789,6 +808,11 @@ void gameUpdate() {
     // Automatically update during each frame
     time2 = GetTickCount();
     while ((int)time2 - time1 > 1000 / FPS) {
+        // 添加暂停检查，如果游戏暂停则跳过更新
+        if (GAME_PAUSED) {
+            time1 = time2;
+            break;
+        }
 
         // Bird speed & location
         // Bird will always fall, until reach the ground
@@ -870,7 +894,7 @@ void gameUpdate() {
             if ((int)coins.size() < 3 && rand() % 120 == 0) {
                 Coin c; c.x = WIDTH + 20; c.y = 80 + rand() % 260; c.r = 6; c.frame = 0; c.taken = false; coins.push_back(c);
             }
-            for (auto &co : coins) {
+            for (auto& co : coins) {
                 if (co.taken) continue;
                 co.x -= SPEED_PIPE;
                 // pickup check
@@ -880,7 +904,7 @@ void gameUpdate() {
                 }
             }
             // remove off-screen/taken coins to keep vector small
-            coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const Coin &c){ return c.taken || c.x + c.r < 0; }), coins.end());
+            coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const Coin& c) { return c.taken || c.x + c.r < 0; }), coins.end());
         }
 
 
@@ -918,7 +942,7 @@ void gameUpdate() {
                     score.point += 1;                                   // Update score
                     if (GAME_MODE == MODE_LEVEL && !LEVEL_COMPLETE) {
                         if (score.point >= level_target) {
-                        LEVEL_COMPLETE = true;
+                            LEVEL_COMPLETE = true;
                             level_stop_spawn = true;                     // stop generating new
                             GAME_END = TRUE; // Treat as win end
                             level_last_phase = true;                     // enable vertical oscillation
